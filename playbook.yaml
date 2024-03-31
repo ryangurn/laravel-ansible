@@ -1,0 +1,204 @@
+- name: Laravel Server Setup
+  hosts: myhosts
+  tasks:
+    - name: Ping my hosts
+      ansible.builtin.ping:
+
+    - name: System details
+      debug: msg="{{ item }}"
+      with_items:
+        - "Distribution - {{ ansible_distribution }}"
+        - "Major Version - {{ ansible_distribution_major_version }}"
+        - "Version - {{ ansible_distribution_version }}"
+        - "User - {{ ansible_user_id }}"
+
+    - name: Operating System Compatibility Check
+      ansible.builtin.fail:
+        msg: "George only supports Ubuntu 20.04 and 22.04"
+      when: ansible_distribution != "Ubuntu"
+
+    - name: Verify Root
+      ansible.builtin.fail:
+        msg: "This script must be run as root."
+      when: ansible_user_id != "root"
+
+    - name: Create The Root SSH Directory If Necessary
+      ansible.builtin.file:
+        path: /root/.ssh
+        state: directory
+        
+    - name: Create The Root SSH Authorized Keys If Necessary
+      ansible.builtin.file:
+        path: /root/.ssh/authorized_keys
+        state: file
+
+    - name: Add George User
+      ansible.builtin.user:
+        name: george
+        shell: /bin/bash
+        groups: sudo
+        append: yes
+        state: present
+
+    - name: Create George's Directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - /home/george/.ssh/
+        - /home/george/.george/
+
+    - name: Copy Root Profile To George
+      ansible.builtin.copy:
+        src: "/root/{{ item }}"
+        dest: "/home/george"
+        remote_src: true
+      loop:
+        - .profile
+        - .bashrc
+
+      # TODO: Add Server SSH KEY to Authorized_Keys
+
+    - name: Copy Root Authorized Keys To George
+      ansible.builtin.copy:
+        src: "/root/.ssh/authorized_keys"
+        dest: "/home/george/.ssh/"
+        remote_src: true
+
+    - name: Set George Home Directory Permissions
+      ansible.builtin.file:
+        path: /home/george
+        owner: george
+        group: george
+        mode: '755'
+
+    - name: Set George SSH Authorized Key Permissions
+      ansible.builtin.file:
+        path: /home/george/.ssh/authorized_keys
+        mode: '600'
+
+    - name: Uncomment Precedence from gai.conf
+      ansible.builtin.shell: sed -i "s/#precedence ::ffff:0:0\/96  100/precedence ::ffff:0:0\/96  100/" /etc/gai.conf
+
+    - name: /etc/needrestart/needrestart.conf exist?
+      ansible.builtin.stat:
+        path: /etc/needrestart/needrestart.conf
+      register: needrestart
+
+    - name: Check Need Restart Conf
+      ansible.builtin.shell: sed -i "s/^#\$nrconf{restart} = 'i';/\$nrconf{restart} = 'a';/" /etc/needrestart/needrestart.conf
+      when: needrestart.stat.exists
+
+    - name: /swapfile exist?
+      ansible.builtin.stat:
+        path: /swapfile
+      register: swapfile
+
+    - name: swapfile fallocate
+      ansible.builtin.shell: fallocate -l 1G /swapfile
+      when: not swapfile.stat.exists
+
+    - name: swapfile chmod
+      ansible.builtin.file:
+        path: /swapfile
+        mode: '600'
+      when: not swapfile.stat.exists
+
+    - name: swapfile cont
+      ansible.builtin.shell: "{{ item }}"
+      when: not swapfile.stat.exists
+      with_list:
+        - mkswap /swapfile
+        - swapon /swapfile
+        - echo "/swapfile none swap sw 0 0" >> /etc/fstab
+        - echo "vm.swappiness=30" >> /etc/sysctl.conf
+        - echo "vm.vfs_cache_pressure=50" >> /etc/sysctl.conf
+        - export DEBIAN_FRONTEND=noninteractive
+
+    - name: update all apt packages
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+
+    - name: upgrade operating system
+      ansible.builtin.apt:
+        upgrade: dist
+
+    - name: Install software-properties-common
+      ansible.builtin.apt:
+        name: software-properties-common
+
+    - name: Add nginx apt repo
+      ansible.builtin.apt_repository:
+        repo: 'ppa:ondrej/nginx'
+        state: present
+
+    - name: Add php apt repo
+      ansible.builtin.apt_repository:
+        repo: 'ppa:ondrej/php'
+        state: present
+
+#    - name: Setup redis repo
+#      block:
+#        - name: redis |no apt key
+#          ansible.builtin.get_url:
+#            url: https://packages.redis.io/gpg
+#            dest: /usr/share/keyrings/redis-archive-keyring.gpg
+#
+#        - name: redis | apt source
+#          ansible.builtin.apt_repository:
+#            repo: "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+#            state: present
+#            validate_certs: false
+
+    - name: update all apt packages
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+
+    - name: Add universe apt repo
+      ansible.builtin.apt_repository:
+        repo: 'universe'
+        state: present
+
+    - name: Install a list of packages
+      ansible.builtin.apt:
+        pkg:
+          - acl 
+          - build-essential 
+          - bsdmainutils 
+          - cron 
+          - curl 
+          - fail2ban 
+          - g++ 
+          - gcc 
+          - git 
+          - jq 
+          - libmagickwand-dev 
+          - libmcrypt4 
+          - libpcre2-dev 
+          - libpcre3-dev 
+          - libpng-dev 
+          - make 
+          - ncdu 
+          - net-tools 
+          - pkg-config 
+          - python3 
+          - python3-pip 
+          - rsyslog 
+          - sendmail 
+          - sqlite3 
+          - supervisor 
+          - ufw 
+          - unzip 
+          - uuid-runtime 
+          - whois 
+          - zip 
+          - zsh
+
+    - name: Install httpie
+      ansible.builtin.pip:
+        name:
+          - httpie
+          - awscli
+          - awscli-plugin-endpoint
