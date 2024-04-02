@@ -202,3 +202,22 @@
           - httpie
           - awscli
           - awscli-plugin-endpoint
+
+    - name: Setup SSHD Config Directory
+      ansible.builtin.file:
+        path: "/etc/ssh/sshd_config.d"
+        state: directory
+
+    # create 49-george.conf
+
+    - name: SSH Keygen
+      ansible.builtin.shell: ssh-keygen -A
+
+    - name: Restart SSH
+      ansible.builtin.shell: service ssh restart
+
+    - name: Set hostname
+      ansible.builtin.shell: sed -i 's/127\.0\.1\.1.*test test/127.0.0.1 test.localdomain test/' /etc/hosts
+
+    - name: Set Timezone
+      ansible.builtin.shell: ln -sf /usr/share/zoneinfo/UTC /etc/localtime
