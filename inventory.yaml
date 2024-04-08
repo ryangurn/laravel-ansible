@@ -1,4 +1,11 @@
-myhosts:
+application:
     hosts:
-        parallels:
-            ansible_host: 192.168.1.126
+        192.168.1.50
+
+database:
+    hosts:
+        192.168.1.50
+
+cache:
+    hosts:
+        192.168.1.50
