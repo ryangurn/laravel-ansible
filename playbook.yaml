@@ -3,6 +3,7 @@
   become: true
 
   roles:
+    - common
     - geerlingguy.pip
     - geerlingguy.supervisor
 
@@ -11,21 +12,78 @@
   become: true
 
   vars:
-    php_version: '8.2'
+    php_version: '8.1'
     php_enable_php_fpm: true
-    apache_vhosts:
-      - servername: "localhost"
-        documentroot: "/var/www/example"
+    php_webserver_daemon: "www-data"
+    php_fpm_pool_user: "www-data"
+    php_fpm_pool_group: "www-data"
+    nginx_user: "www-data"
+    nginx_error_log: "off"
+    nginx_access_log: "off"
+    php_fpm_pools:
+      - pool_name: www
+        pool_template: www.conf.j2
+        pool_listen: "/var/run/php/php8.1-fpm.sock"
+        pool_listen_allowed_clients: "192.168.1.162,127.0.0.1,0.0.0.0"
+        pool_pm: dynamic
+        pool_pm_max_children: 20
+        pool_pm_start_servers: 2
+        pool_pm_min_spare_servers: 1
+        pool_pm_max_spare_servers: 3
+        pool_pm_max_requests: 500
+        pool_pm_status_path: ''
+    nginx_vhosts:
+      - listen: "80"
+        server_name: "192.168.1.162"
+        root: /var/www/example
+        index: "index.php index.html"
+        error_page: "404 /index.php"
+        access_log: "/var/log/nginx/example/access.log combined"
+        error_log: "/var/log/nginx/example/error.log"
+        state: "present"
         extra_parameters: |
-          ProxyPassMatch ^/(.*\.php(/.*)?)$ "fcgi://127.0.0.1:9000/var/www/example"
+          location / {
+            try_files $uri $uri/ /index.php?$query_string;
+          }
+
+          location = /favicon.ico { access_log off; log_not_found off; }
+          location = /robots.txt  { access_log off; log_not_found off; }
+
+          location ~ \.php$ {
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+            fastcgi_index index.php;
+            fastcgi_param   QUERY_STRING        $query_string;
+            fastcgi_param   REQUEST_METHOD      $request_method;
+            fastcgi_param   CONTENT_TYPE        $content_type;
+            fastcgi_param   CONTENT_LENGTH      $content_length;
+            fastcgi_param   SCRIPT_FILENAME     $realpath_root$fastcgi_script_name;
+            fastcgi_param   SCRIPT_NAME     $fastcgi_script_name;
+            fastcgi_param   REQUEST_URI     $request_uri;
+            fastcgi_param   DOCUMENT_URI        $document_uri;
+            fastcgi_param   DOCUMENT_ROOT       $realpath_root;
+            fastcgi_param   SERVER_PROTOCOL     $server_protocol;
+            fastcgi_param   GATEWAY_INTERFACE   CGI/1.1;
+            fastcgi_param   SERVER_SOFTWARE     nginx/$nginx_version;
+            fastcgi_param   REMOTE_ADDR     $remote_addr;
+            fastcgi_param   REMOTE_PORT     $remote_port;
+            fastcgi_param   SERVER_ADDR     $server_addr;
+            fastcgi_param   SERVER_PORT     $server_port;
+            fastcgi_param   SERVER_NAME     $server_name;
+            fastcgi_param   HTTPS           $https if_not_empty;
+            fastcgi_param   REDIRECT_STATUS     200;
+            fastcgi_param   HTTP_PROXY  "";
+          }
+
+          location ~ /\.(?!well-known).* {
+              deny all;
+          }
 
   roles:
-    - geerlingguy.apache
-    - name: geerlingguy.repo-remi
-      when: ansible_os_family == 'RedHat'
+    - laravel
+    - geerlingguy.nginx
     - geerlingguy.php
     - geerlingguy.php-versions
-    - geerlingguy.apache-php-fpm
     - geerlingguy.php-memcached
     - geerlingguy.php-mysql
     - geerlingguy.php-redis
