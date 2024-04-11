@@ -1,0 +1,23 @@
+- name: Create Example WWW Directory
+  ansible.builtin.file:
+      path: /var/www/example
+      state: directory
+      mode: '0755'
+      owner: 'www-data'
+      group: 'www-data'
+      
+- name: Create Example Log Directory
+  ansible.builtin.file:
+      path: /var/log/nginx/example
+      state: directory
+      mode: '0755'
+      owner: 'www-data'
+      group: 'www-data'
+      
+- name: Copy Index
+  ansible.builtin.copy:
+    src: roles/laravel/templates/index.php
+    dest: /var/www/example
+    owner: 'www-data'
+    group: 'www-data'
+    mode: '0644'
