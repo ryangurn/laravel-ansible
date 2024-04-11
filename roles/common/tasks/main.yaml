@@ -1,0 +1,5 @@
+- name: Create Example WWW Directory
+  ansible.builtin.file:
+      path: /var/www/example
+      state: directory
+      mode: '0755'
